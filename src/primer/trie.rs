@@ -1,103 +1,168 @@
-use std::{cell::RefCell, collections::HashMap, env::consts, rc::Rc};
+use crate::utils::logutil;
+use std::{
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    env::consts,
+    hash::Hash,
+    rc::Rc,
+};
 
 /// Trie is a tree data structure that is used to store a dynamic set of strings
 /// It is used to store strings that can be represented as a sequence of characters
 /// The root of the trie is an empty string
-struct TrieNode{
-    children : HashMap<char, Rc<RefCell<TrieNode>>>,
-    is_value_node : bool,
+
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct TrieNode<T> {
+    pub children: HashMap<char, Rc<RefCell<TrieNode<T>>>>,
+    pub is_value_node: bool,
+    pub value: Rc<RefCell<T>>,
 }
 
-pub trait TrieNode_fn {
-    fn new() -> Self;
-    fn Clone(&self) -> Box<TrieNode>;
+pub trait TrieNodeFn<T> {
+    fn Clone(&self) -> Box<TrieNode<T>>;
 }
 
-impl TrieNode_fn for TrieNode {
-    fn new() -> Self {
+impl<T: Default> TrieNodeFn<T> for TrieNode<T> {
+    fn Clone(&self) -> Box<TrieNode<T>> {
+        Box::new(TrieNode {
+            children: self.children.clone(),
+            is_value_node: self.is_value_node,
+            value: self.value.clone(),
+        })
+    }
+}
+
+impl<T:Default> TrieNode<T> {
+    pub fn new() -> Self {
         TrieNode {
-            children : HashMap::new(),
-            is_value_node : false,
+            children: HashMap::new(),
+            is_value_node: false,
+            value: Rc::new(RefCell::new(T::default())),
         }
     }
-    fn Clone(&self) -> Box<TrieNode> {
-        Box::new(
-            TrieNode { 
-                children : self.children.clone(),
-                is_value_node : self.is_value_node,
-             }
-        )
-    }
-}
-
-impl TrieNode {
-    pub fn new_with_children(children : HashMap<char, Rc<RefCell<TrieNode>>>, is_value_node : bool) -> Self {
+    pub fn new_with_children(
+        children: HashMap<char, Rc<RefCell<TrieNode<T>>>>,
+        is_value_node: bool,
+    ) -> Self {
         TrieNode {
             children,
             is_value_node,
+            value: Rc::new(RefCell::new(T::default())),
         }
     }
-}
-/// TrieNodeWithValue is a TrieNode with a value
-/// The value is stored in a Rc<RefCell<T>> to allow for shared ownership and interior mutability
-/// This is useful when the value is a struct that needs to be mutated
-struct TrieNodeWithValue<T>{
-    node : TrieNode,
-    value : Rc<RefCell<T>>,
-}
-
-impl<T: Default> TrieNode_fn for TrieNodeWithValue<T> {
-    fn new() -> Self {
-        TrieNodeWithValue {
-            node : TrieNode::new(),
-            value : Rc::new(RefCell::new(T::default())),
-        }
+    pub fn get_children(&self) -> &HashMap<char, Rc<RefCell<TrieNode<T>>>> {
+        &self.children
     }
-    fn Clone(&self) -> Box<TrieNode> {
-        Box::new(
-            TrieNode { 
-                children : self.node.children.clone(),
-                is_value_node : self.node.is_value_node,
-             }
-        )
+    pub fn get_is_value_node(&self) -> bool {
+        self.is_value_node
+    }
+    pub fn set_is_value_node(&mut self, is_value_node: bool) {
+        self.is_value_node = is_value_node;
+    }
+    pub fn get_child(&self, c: char) -> Option<Rc<RefCell<TrieNode<T>>>> {
+        self.children.get(&c).map(|x| x.clone())
+    }
+    pub fn add_child(&mut self, c: char, node: Rc<RefCell<TrieNode<T>>>) {
+        self.children.insert(c, node);
+    }
+    pub fn remove_child(&mut self, c: char) {
+        self.children.remove(&c);
+    }
+    pub fn get_value(&self) -> Option<Rc<RefCell<T>>> {
+        Some(self.value.clone())
+    }
+    pub fn set_value(&mut self, value: T) {
+        self.value = Rc::new(RefCell::new(value));
     }
 }
-
-impl<T> TrieNodeWithValue<T> {
-    pub fn new_with_cv(children : HashMap<char, Rc<RefCell<TrieNode>>>, is_value_node : bool, value : Rc<RefCell<T>>) -> Self {
-        TrieNodeWithValue {
-            node : TrieNode::new_with_children(children, is_value_node),
-            value,
-        }
-    }
-    pub fn new_with_value(value : Rc<RefCell<T>>) -> Self {
-        TrieNodeWithValue {
-            node : TrieNode::new(),
-            value,
-        }
-    }   
+pub struct Trie<T: Default> {
+    root: Rc<RefCell<TrieNode<T>>>,
 }
 
-pub struct Trie {
-    root : Rc<RefCell<TrieNode>>,
-}
-
-impl Trie {
+impl<T: Default> Trie<T> {
     pub fn new() -> Self {
         Trie {
-            root : Rc::new(RefCell::new(TrieNode::new())),
+            root: Rc::new(RefCell::new(TrieNode::new())),
         }
     }
-    pub fn new_with_root(root : Rc<RefCell<TrieNode>>) -> Self {
-        Trie {
-            root,
-        }
+    pub fn new_with_root(root: Rc<RefCell<TrieNode<T>>>) -> Self {
+        Trie { root }
+    }
+    pub fn get_root(&self) -> Rc<RefCell<TrieNode<T>>> {
+        self.root.clone()
     }
 }
 
-pub trait Trie_fn<T> {
+pub trait TrieFn<T: Default> {
     // TODO : implement the string_view struct
-    fn Get(key : String) -> Option<Rc<RefCell<T>>>;
-    fn Put(key : String, value : T) -> Trie;
-    fn Remove(key : String) -> Trie;
+    fn Get(&self, key: String) -> Option<Rc<RefCell<T>>>;
+    fn Put(&self, key: String, value: T) -> Trie<T>;
+    fn Remove(&self, key: String) -> Trie<T>;
+}
+
+impl<T: Default> TrieFn<T> for Trie<T> {
+    fn Get(&self, key: String) -> Option<Rc<RefCell<T>>> {
+        if self.get_root().borrow().children.is_empty() {
+            return None;
+        }
+        let mut current_node = self.get_root().clone();
+        for c in key.chars() {
+            let child = current_node.borrow().get_child(c);
+            match child {
+                Some(x) => {
+                    current_node = x;
+                }
+                None => {
+                    return None;
+                }
+            }
+        }
+        if current_node.borrow().get_is_value_node() {
+            return Some(current_node.borrow().get_value().unwrap());
+        }
+        None
+    }
+    fn Put(&self, key: String, value: T) -> Trie<T> {
+        let root = self.get_root();
+        if key.is_empty() {
+            return Trie::<T>::new_with_root(root);
+        }
+
+        let mut current_node = root.clone();
+        for i in key[0..key.len() - 1].chars() {
+            if let Some(ch) = {
+                let mut node_borrow = current_node.borrow_mut();
+                node_borrow.get_child(i)
+            } {
+                current_node = ch.clone();
+                continue;
+            } else {
+                let new_node = Rc::new(RefCell::new(TrieNode::new()));
+                current_node.borrow_mut().add_child(i, new_node.clone());
+                current_node = new_node;
+            }
+        }
+        let last_char = key.chars().last().unwrap();
+        
+        if let Some(ch) = {
+            let mut last_node = current_node.borrow_mut();
+            last_node.get_child(last_char)
+        } {
+            current_node = ch.clone();
+            current_node.borrow_mut().set_value(value);
+            current_node.borrow_mut().set_is_value_node(true);
+
+        } else {
+            let new_node = Rc::new(RefCell::new(TrieNode::<T>::new()));
+            current_node.borrow_mut().add_child(last_char, new_node.clone());
+            let mut last_node = new_node.borrow_mut();
+            last_node.set_value(value);
+            last_node.set_is_value_node(true);
+        }
+        Trie::new_with_root(root)
+    }
+
+    fn Remove(&self, key: String) -> Trie<T> {
+        unimplemented!()
+    }
 }
