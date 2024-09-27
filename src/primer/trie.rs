@@ -1,4 +1,4 @@
-use crate::utils::logutil;
+
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -32,7 +32,7 @@ impl<T: Default> TrieNodeFn<T> for TrieNode<T> {
     }
 }
 
-impl<T:Default> TrieNode<T> {
+impl<T: Default> TrieNode<T> {
     pub fn new() -> Self {
         TrieNode {
             children: HashMap::new(),
@@ -75,6 +75,8 @@ impl<T:Default> TrieNode<T> {
         self.value = Rc::new(RefCell::new(value));
     }
 }
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Trie<T: Default> {
     root: Rc<RefCell<TrieNode<T>>>,
 }
@@ -90,6 +92,11 @@ impl<T: Default> Trie<T> {
     }
     pub fn get_root(&self) -> Rc<RefCell<TrieNode<T>>> {
         self.root.clone()
+    }
+    pub fn Clone(&self) -> Trie<T> {
+        Trie {
+            root: self.root.clone(),
+        }
     }
 }
 
@@ -143,7 +150,7 @@ impl<T: Default> TrieFn<T> for Trie<T> {
             }
         }
         let last_char = key.chars().last().unwrap();
-        
+
         if let Some(ch) = {
             let mut last_node = current_node.borrow_mut();
             last_node.get_child(last_char)
@@ -151,10 +158,11 @@ impl<T: Default> TrieFn<T> for Trie<T> {
             current_node = ch.clone();
             current_node.borrow_mut().set_value(value);
             current_node.borrow_mut().set_is_value_node(true);
-
         } else {
             let new_node = Rc::new(RefCell::new(TrieNode::<T>::new()));
-            current_node.borrow_mut().add_child(last_char, new_node.clone());
+            current_node
+                .borrow_mut()
+                .add_child(last_char, new_node.clone());
             let mut last_node = new_node.borrow_mut();
             last_node.set_value(value);
             last_node.set_is_value_node(true);
@@ -163,6 +171,57 @@ impl<T: Default> TrieFn<T> for Trie<T> {
     }
 
     fn Remove(&self, key: String) -> Trie<T> {
-        unimplemented!()
+        if key.is_empty() {
+            return self.Clone();
+        }
+        let root = self.get_root();
+        let mut path = Vec::<Rc<RefCell<TrieNode<T>>>>::new();
+
+        let mut current_node = root.clone();
+        for i in key[0..key.len() - 1].chars() {
+            if let Some(ch) = {
+                let mut node_borrow = current_node.borrow_mut();
+                node_borrow.get_child(i)
+            } {
+                current_node = ch.clone();
+                path.push(current_node.clone());
+                continue;
+            } else {
+                return self.Clone();
+            }
+        }
+        // if the last node has no children, remove the node
+        // then check the path back to the root and remove any nodes that have no children
+
+        let last_char = key.chars().last().unwrap();
+        let mut last_node = current_node.borrow_mut();
+        if let Some(ch) = last_node.get_child(last_char) {
+            let mut child = ch.borrow_mut();
+            if child.get_children().is_empty() {
+                last_node.remove_child(last_char);
+            } else {
+                child.set_is_value_node(false);
+            }
+        }
+        let mut index = path.len();
+
+        while index > 0 {
+            index -= 1;
+            {
+                let node = &path[index]; // 借用仅限在此作用域中
+                let mut node_borrow = node.borrow_mut();
+                
+                if !node_borrow.get_children().is_empty() {
+                    continue;
+                }
+            } 
+
+            path.pop(); 
+            if let Some(parent) = path.last() {
+                let mut parent_borrow = parent.borrow_mut();
+                parent_borrow.remove_child(last_char);
+            }
+        }
+        Trie::new_with_root(root)
     }
 }
