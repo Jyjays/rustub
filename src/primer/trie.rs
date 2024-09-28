@@ -1,9 +1,7 @@
 
 use std::{
-    cell::{Ref, RefCell},
+    cell::RefCell,
     collections::HashMap,
-    env::consts,
-    hash::Hash,
     rc::Rc,
 };
 
@@ -19,11 +17,11 @@ pub struct TrieNode<T> {
 }
 
 pub trait TrieNodeFn<T> {
-    fn Clone(&self) -> Box<TrieNode<T>>;
+    fn clone(&self) -> Box<TrieNode<T>>;
 }
 
 impl<T: Default> TrieNodeFn<T> for TrieNode<T> {
-    fn Clone(&self) -> Box<TrieNode<T>> {
+    fn clone(&self) -> Box<TrieNode<T>> {
         Box::new(TrieNode {
             children: self.children.clone(),
             is_value_node: self.is_value_node,
@@ -93,7 +91,7 @@ impl<T: Default> Trie<T> {
     pub fn get_root(&self) -> Rc<RefCell<TrieNode<T>>> {
         self.root.clone()
     }
-    pub fn Clone(&self) -> Trie<T> {
+    pub fn clone(&self) -> Trie<T> {
         Trie {
             root: self.root.clone(),
         }
@@ -102,13 +100,13 @@ impl<T: Default> Trie<T> {
 
 pub trait TrieFn<T: Default> {
     // TODO : implement the string_view struct
-    fn Get(&self, key: String) -> Option<Rc<RefCell<T>>>;
-    fn Put(&self, key: String, value: T) -> Trie<T>;
-    fn Remove(&self, key: String) -> Trie<T>;
+    fn get(&self, key: String) -> Option<Rc<RefCell<T>>>;
+    fn put(&self, key: String, value: T) -> Trie<T>;
+    fn remove(&self, key: String) -> Trie<T>;
 }
 
 impl<T: Default> TrieFn<T> for Trie<T> {
-    fn Get(&self, key: String) -> Option<Rc<RefCell<T>>> {
+    fn get(&self, key: String) -> Option<Rc<RefCell<T>>> {
         if self.get_root().borrow().children.is_empty() {
             return None;
         }
@@ -129,7 +127,7 @@ impl<T: Default> TrieFn<T> for Trie<T> {
         }
         None
     }
-    fn Put(&self, key: String, value: T) -> Trie<T> {
+    fn put(&self, key: String, value: T) -> Trie<T> {
         let root = self.get_root();
         if key.is_empty() {
             return Trie::<T>::new_with_root(root);
@@ -138,7 +136,7 @@ impl<T: Default> TrieFn<T> for Trie<T> {
         let mut current_node = root.clone();
         for i in key[0..key.len() - 1].chars() {
             if let Some(ch) = {
-                let mut node_borrow = current_node.borrow_mut();
+                let node_borrow = current_node.borrow_mut();
                 node_borrow.get_child(i)
             } {
                 current_node = ch.clone();
@@ -152,7 +150,7 @@ impl<T: Default> TrieFn<T> for Trie<T> {
         let last_char = key.chars().last().unwrap();
 
         if let Some(ch) = {
-            let mut last_node = current_node.borrow_mut();
+            let last_node = current_node.borrow_mut();
             last_node.get_child(last_char)
         } {
             current_node = ch.clone();
@@ -170,9 +168,9 @@ impl<T: Default> TrieFn<T> for Trie<T> {
         Trie::new_with_root(root)
     }
 
-    fn Remove(&self, key: String) -> Trie<T> {
+    fn remove(&self, key: String) -> Trie<T> {
         if key.is_empty() {
-            return self.Clone();
+            return self.clone();
         }
         let root = self.get_root();
         let mut path = Vec::<Rc<RefCell<TrieNode<T>>>>::new();
@@ -180,14 +178,14 @@ impl<T: Default> TrieFn<T> for Trie<T> {
         let mut current_node = root.clone();
         for i in key[0..key.len() - 1].chars() {
             if let Some(ch) = {
-                let mut node_borrow = current_node.borrow_mut();
+                let node_borrow = current_node.borrow_mut();
                 node_borrow.get_child(i)
             } {
                 current_node = ch.clone();
                 path.push(current_node.clone());
                 continue;
             } else {
-                return self.Clone();
+                return self.clone();
             }
         }
         // if the last node has no children, remove the node
@@ -209,7 +207,7 @@ impl<T: Default> TrieFn<T> for Trie<T> {
             index -= 1;
             {
                 let node = &path[index]; // 借用仅限在此作用域中
-                let mut node_borrow = node.borrow_mut();
+                let node_borrow = node.borrow_mut();
                 
                 if !node_borrow.get_children().is_empty() {
                     continue;
