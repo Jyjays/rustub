@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 # 依赖项
+tokio = { version = "1", features = ["full"] }
 
 [lib]
 path = "src/lib.rs"
